@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strconv"
@@ -104,13 +106,45 @@ func extractPwItems(lines []string) []PwItem {
 	return output
 }
 
-func main() {
-	scanner := bufio.NewScanner(os.Stdin)
+func getContentFromStdin() []string {
+	return getContent(os.Stdin)
+}
+
+func getContentFromFile(file string) []string {
+	f, err := os.Open(file)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	return getContent(f)
+
+}
+
+func getContent(r io.Reader) []string {
+	scanner := bufio.NewScanner(r)
 
 	var content []string
 
 	for scanner.Scan() {
 		content = append(content, scanner.Text())
+	}
+
+	return content
+}
+
+func main() {
+	var content []string
+
+	flag.Parse()
+	switch name := flag.Arg(0); {
+	case name == "":
+		content = getContentFromStdin()
+
+	default:
+		content = getContentFromFile(flag.Arg(0))
 	}
 
 	cleanContent := cleanFileContent(content)
