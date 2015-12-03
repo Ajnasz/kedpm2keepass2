@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,18 +21,20 @@ type PwItem struct {
 	Notes    string
 }
 
-func fixPath(path string) string {
-	if strings.Index(path, ".") == 0 {
-		return path[1:]
+func (item *PwItem) GetFixedPath() string {
+	newPath := path.Dir(item.Path)
+
+	if !path.IsAbs(newPath) {
+		newPath = path.Join("/", newPath)
 	}
 
-	return path
+	return newPath
 }
 
 func (item *PwItem) ToCSVLine() string {
 	var arr []string
 
-	arr = append(arr, strconv.Quote(item.Path))
+	arr = append(arr, strconv.Quote(item.GetFixedPath()))
 	arr = append(arr, strconv.Quote(item.Title))
 	arr = append(arr, strconv.Quote(item.Username))
 	arr = append(arr, strconv.Quote(item.Password))
@@ -72,15 +75,15 @@ func extractPwItems(lines []string) []PwItem {
 		match := pwItemRegexp.Match([]byte(line))
 
 		if match {
-			fieldName := line[0:strings.Index(line, ":")]
-			fieldValue := strings.TrimSpace(line[strings.Index(line, ":")+1:])
+			fieldName := line[0:strings.Index(line, ": ")]
+			fieldValue := line[strings.Index(line, ":")+2:]
 
 			switch fieldName {
 			case "Password":
 				pwItem.Password = fieldValue
 				break
 			case "Path":
-				pwItem.Path = fixPath(fieldValue)
+				pwItem.Path = fieldValue
 				break
 			case "Title":
 				pwItem.Title = fieldValue
