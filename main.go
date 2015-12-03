@@ -28,6 +28,10 @@ func (item *PwItem) GetFixedPath() string {
 		newPath = path.Join("/", newPath)
 	}
 
+	if newPath == "/" {
+		return ""
+	}
+
 	return newPath
 }
 
