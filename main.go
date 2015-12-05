@@ -4,160 +4,23 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io"
 	"os"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
-type PwItem struct {
-	Title    string
-	Path     string
-	Username string
-	Password string
-	URL      string
-	Notes    string
-}
-
-func (item *PwItem) GetFixedPath() string {
-	newPath := path.Dir(item.Path)
-
-	if !path.IsAbs(newPath) {
-		newPath = path.Join("/", newPath)
-	}
-
-	if newPath == "/" {
-		return ""
-	}
-
-	return newPath
-}
-
-func (item *PwItem) ToCSVLine() string {
-	var arr []string
-
-	arr = append(arr, strconv.Quote(item.GetFixedPath()))
-	arr = append(arr, strconv.Quote(item.Title))
-	arr = append(arr, strconv.Quote(item.Username))
-	arr = append(arr, strconv.Quote(item.Password))
-	arr = append(arr, strconv.Quote(item.URL))
-	arr = append(arr, strconv.Quote(item.Notes))
-
-	return strings.Join(arr, ",")
-}
-
-func cleanFileContent(lines []string) []string {
-	pwItemRegexp, _ := regexp.Compile("(^(Path|Title|Username|Password|URL|Notes):|^$)")
-
-	output := make([]string, 5)
-
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-
-		match := pwItemRegexp.Match([]byte(line))
-
-		if match {
-			output = append(output, line)
-		}
-	}
-
-	return output
-}
-
-func extractPwItems(lines []string) []PwItem {
+func isPwField(line string) bool {
 	pwItemRegexp, _ := regexp.Compile("^(Path|Title|Username|Password|URL|Notes):")
 
-	pwItem := PwItem{}
-
-	output := make([]PwItem, 0)
-
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-
-		match := pwItemRegexp.Match([]byte(line))
-
-		if match {
-			fieldName := line[0:strings.Index(line, ": ")]
-			fieldValue := line[strings.Index(line, ":")+2:]
-
-			switch fieldName {
-			case "Password":
-				pwItem.Password = fieldValue
-				break
-			case "Path":
-				pwItem.Path = fieldValue
-				break
-			case "Title":
-				pwItem.Title = fieldValue
-				break
-			case "Username":
-				pwItem.Username = fieldValue
-				break
-			case "URL":
-				pwItem.URL = fieldValue
-				break
-			case "Notes":
-				pwItem.Notes = fieldValue
-				break
-			}
-		} else {
-			if pwItem.Password != "" {
-				output = append(output, pwItem)
-			}
-			pwItem = PwItem{}
-		}
-	}
-
-	return output
+	return pwItemRegexp.Match([]byte(line))
 }
 
-func getContentFromStdin() []string {
-	return getContent(os.Stdin)
+func isEmptyLine(line string) bool {
+	return len(line) == 0
 }
 
-func getContentFromFile(file string) []string {
-	f, err := os.Open(file)
-
-	if err != nil {
-		panic(err)
-	}
-
-	defer f.Close()
-
-	return getContent(f)
-
-}
-
-func getContent(r io.Reader) []string {
-	scanner := bufio.NewScanner(r)
-
-	var content []string
-
-	for scanner.Scan() {
-		content = append(content, scanner.Text())
-	}
-
-	return content
-}
-
-func main() {
-	var content []string
-
-	flag.Parse()
-	switch name := flag.Arg(0); {
-	case name == "":
-		content = getContentFromStdin()
-
-	default:
-		content = getContentFromFile(flag.Arg(0))
-	}
-
-	cleanContent := cleanFileContent(content)
-
-	pwItems := extractPwItems(cleanContent)
-
+func printHeader() {
 	var header []string
 
 	header = append(header, strconv.Quote("Group"))
@@ -169,8 +32,47 @@ func main() {
 
 	fmt.Println(strings.Join(header, ","))
 
-	for _, pwItem := range pwItems {
-		fmt.Println(pwItem.ToCSVLine())
+}
+
+func printRows(scanner *bufio.Scanner) {
+	pwItem := PwItem{}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if isEmptyLine(line) {
+			if pwItem.Password != "" {
+				fmt.Println(pwItem.ToCSVLine())
+				pwItem = PwItem{}
+			}
+		} else {
+			if isPwField(line) {
+				pwItem.SetItemProp(line)
+			}
+		}
+	}
+}
+
+func main() {
+	var content *bufio.Scanner
+
+	flag.Parse()
+	switch name := flag.Arg(0); {
+	case name == "":
+		content = bufio.NewScanner(os.Stdin)
+
+	default:
+		f, err := os.Open(flag.Arg(0))
+
+		if err != nil {
+			panic(err)
+		}
+
+		defer f.Close()
+
+		content = bufio.NewScanner(f)
 	}
 
+	printHeader()
+	printRows(content)
 }
